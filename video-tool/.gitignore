@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+target
+installers
+src-tauri/target
 
 # Editor directories and files
 .vscode/*
@@ -29,4 +32,3 @@ src-tauri/binaries/*.exe
 
 # don't commit ffmpeg binaries
 src-tauri/binaries/*.exe
-

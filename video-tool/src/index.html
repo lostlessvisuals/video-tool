@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -8,7 +8,148 @@
     <script type="module" src="./main.js" defer></script>
   </head>
   <body>
-    <div style="padding:16px;font-family:system-ui">INDEX LOADED</div>
-    <div id="app"></div>
+    <div class="app">
+      <header class="app-header">
+        <h1>Video Tool</h1>
+        <p>Inspect, compare, and export videos with bundled ffmpeg.</p>
+      </header>
+
+      <section class="inputs">
+        <div class="input-panel" id="input-a">
+          <div class="panel-header">
+            <h2>Input A</h2>
+            <div class="panel-actions">
+              <button data-action="browse" data-target="a">Pick File</button>
+              <button data-action="probe" data-target="a">Probe</button>
+            </div>
+          </div>
+          <label class="field">
+            <span>Path</span>
+            <input type="text" data-field="path-a" placeholder="Select a video file" />
+          </label>
+          <div class="results" data-results="a">
+            <div class="placeholder">No probe results yet.</div>
+          </div>
+        </div>
+
+        <div class="input-panel" id="input-b">
+          <div class="panel-header">
+            <h2>Input B</h2>
+            <div class="panel-actions">
+              <button data-action="browse" data-target="b">Pick File</button>
+              <button data-action="probe" data-target="b">Probe</button>
+            </div>
+          </div>
+          <label class="field">
+            <span>Path</span>
+            <input type="text" data-field="path-b" placeholder="Select a video file" />
+          </label>
+          <div class="results" data-results="b">
+            <div class="placeholder">No probe results yet.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="compare" id="compare">
+        <div class="panel-header">
+          <h2>Compare</h2>
+          <button data-action="compare">Compare</button>
+        </div>
+        <div class="compare-grid" id="compare-grid">
+          <div class="placeholder">Load Input A and B to compare.</div>
+        </div>
+      </section>
+
+      <section class="export" id="export">
+        <div class="panel-header">
+          <h2>Export</h2>
+        </div>
+        <div class="export-grid">
+          <label class="field full">
+            <span>Output File</span>
+            <div class="row">
+              <input type="text" data-field="output-path" placeholder="Choose output file" />
+              <button data-action="output-browse">Browse</button>
+            </div>
+          </label>
+          <label class="field">
+            <span>Container</span>
+            <select data-field="container">
+              <option value="mp4">mp4</option>
+              <option value="mov">mov</option>
+              <option value="mkv">mkv</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Codec</span>
+            <select data-field="codec">
+              <option value="h264">H.264 (libx264)</option>
+              <option value="h265">H.265 (libx265)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>CRF</span>
+            <input type="number" data-field="crf" value="23" min="0" max="51" />
+          </label>
+          <label class="field">
+            <span>Resize Width</span>
+            <input type="number" data-field="resize-width" min="1" placeholder="Keep" />
+          </label>
+          <label class="field">
+            <span>Resize Height</span>
+            <input type="number" data-field="resize-height" min="1" placeholder="Keep" />
+          </label>
+          <label class="field checkbox">
+            <input type="checkbox" data-field="keep-aspect" checked />
+            <span>Keep aspect (Lanczos)</span>
+          </label>
+          <label class="field">
+            <span>Target FPS</span>
+            <input type="number" data-field="fps" min="1" step="0.01" placeholder="Keep" />
+          </label>
+          <label class="field">
+            <span>Trim Start (sec)</span>
+            <input type="number" data-field="trim-start-sec" min="0" step="0.01" placeholder="0" />
+          </label>
+          <label class="field">
+            <span>Trim Duration (sec)</span>
+            <input type="number" data-field="trim-duration-sec" min="0" step="0.01" placeholder="Full" />
+          </label>
+          <label class="field">
+            <span>Trim Start Frame</span>
+            <input type="number" data-field="trim-start-frame" min="0" placeholder="0" />
+          </label>
+          <label class="field">
+            <span>Trim Frame Count</span>
+            <input type="number" data-field="trim-frame-count" min="1" placeholder="All" />
+          </label>
+          <label class="field">
+            <span>Shorten to N Frames</span>
+            <input type="number" data-field="shorten-frames" min="1" placeholder="No cap" />
+          </label>
+          <label class="field checkbox">
+            <input type="checkbox" data-field="audio-copy" />
+            <span>Copy audio (no re-encode)</span>
+          </label>
+        </div>
+        <div class="export-actions">
+          <button data-action="export">Export</button>
+          <button data-action="cancel" disabled>Cancel</button>
+          <button data-action="open-output" disabled>Open Output Folder</button>
+        </div>
+        <div class="progress">
+          <progress value="0" max="100"></progress>
+          <span data-field="progress-text">Idle</span>
+        </div>
+        <div class="command">
+          <div class="panel-header small">
+            <h3>ffmpeg Command</h3>
+            <button data-action="copy-command">Copy</button>
+          </div>
+          <pre data-field="ffmpeg-command">(no command yet)</pre>
+        </div>
+        <div class="status" data-field="status"></div>
+      </section>
+    </div>
   </body>
 </html>
