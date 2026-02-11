@@ -55,6 +55,22 @@
           <h2>Compare</h2>
           <button data-action="compare">Compare</button>
         </div>
+        <div class="preview-controls">
+          <button data-action="load-previews">Load Previews</button>
+          <button data-action="play-both">Play Both</button>
+          <button data-action="pause-both">Pause Both</button>
+          <button data-action="reset-both">Reset</button>
+        </div>
+        <div class="preview-grid" id="preview-grid">
+          <div class="preview-panel">
+            <h3>Input A Preview</h3>
+            <video data-field="preview-a" controls muted></video>
+          </div>
+          <div class="preview-panel">
+            <h3>Input B Preview</h3>
+            <video data-field="preview-b" controls muted></video>
+          </div>
+        </div>
         <div class="compare-grid" id="compare-grid">
           <div class="placeholder">Load Input A and B to compare.</div>
         </div>
@@ -71,6 +87,14 @@
               <input type="text" data-field="output-path" placeholder="Choose output file" />
               <button data-action="output-browse">Browse</button>
             </div>
+          </label>
+          <label class="field">
+            <span>Export Source</span>
+            <select data-field="export-mode">
+              <option value="input-a">Input A only</option>
+              <option value="input-b">Input B only</option>
+              <option value="side-by-side">Input A + Input B (side by side)</option>
+            </select>
           </label>
           <label class="field">
             <span>Container</span>
@@ -140,13 +164,6 @@
         <div class="progress">
           <progress value="0" max="100"></progress>
           <span data-field="progress-text">Idle</span>
-        </div>
-        <div class="command">
-          <div class="panel-header small">
-            <h3>ffmpeg Command</h3>
-            <button data-action="copy-command">Copy</button>
-          </div>
-          <pre data-field="ffmpeg-command">(no command yet)</pre>
         </div>
         <div class="status" data-field="status"></div>
       </section>

@@ -5,8 +5,6 @@ const state = {
   infoB: null,
   exportId: null,
   exportOutput: null,
-  ffmpegCommand: null,
-  lastProgress: 0,
 };
 
 const elements = {
@@ -15,7 +13,10 @@ const elements = {
   resultsA: document.querySelector('[data-results="a"]'),
   resultsB: document.querySelector('[data-results="b"]'),
   compareGrid: document.querySelector('#compare-grid'),
+  previewA: document.querySelector('[data-field="preview-a"]'),
+  previewB: document.querySelector('[data-field="preview-b"]'),
   outputPath: document.querySelector('[data-field="output-path"]'),
+  exportMode: document.querySelector('[data-field="export-mode"]'),
   container: document.querySelector('[data-field="container"]'),
   codec: document.querySelector('[data-field="codec"]'),
   crf: document.querySelector('[data-field="crf"]'),
@@ -31,7 +32,6 @@ const elements = {
   audioCopy: document.querySelector('[data-field="audio-copy"]'),
   progress: document.querySelector('progress'),
   progressText: document.querySelector('[data-field="progress-text"]'),
-  command: document.querySelector('[data-field="ffmpeg-command"]'),
   status: document.querySelector('[data-field="status"]'),
   cancelButton: document.querySelector('[data-action="cancel"]'),
   openOutputButton: document.querySelector('[data-action="open-output"]'),
@@ -40,6 +40,55 @@ const elements = {
 function setStatus(message, isError = true) {
   elements.status.textContent = message;
   elements.status.style.color = isError ? '#f87171' : '#38bdf8';
+}
+
+function toVideoSrc(path) {
+  if (!path) return '';
+  if (tauri?.core?.convertFileSrc) {
+    return tauri.core.convertFileSrc(path);
+  }
+  return `file://${path.replace(/\\/g, '/')}`;
+}
+
+function loadPreviews() {
+  if (elements.pathA.value) {
+    elements.previewA.src = toVideoSrc(elements.pathA.value);
+    elements.previewA.load();
+  }
+  if (elements.pathB.value) {
+    elements.previewB.src = toVideoSrc(elements.pathB.value);
+    elements.previewB.load();
+  }
+}
+
+function mediaElements() {
+  return [elements.previewA, elements.previewB].filter((video) => video?.src);
+}
+
+async function playBoth() {
+  const videos = mediaElements();
+  if (videos.length === 0) {
+    setStatus('Load previews first.');
+    return;
+  }
+  const targetTime = Math.min(...videos.map((video) => video.currentTime || 0));
+  for (const video of videos) {
+    video.currentTime = targetTime;
+  }
+  await Promise.all(videos.map((video) => video.play().catch(() => null)));
+}
+
+function pauseBoth() {
+  for (const video of mediaElements()) {
+    video.pause();
+  }
+}
+
+function resetBoth() {
+  for (const video of mediaElements()) {
+    video.pause();
+    video.currentTime = 0;
+  }
 }
 
 function formatMaybe(value, fallback = '—') {
@@ -135,7 +184,6 @@ function renderCompare() {
   const diffs = computeDiffs(state.infoA, state.infoB);
   const resolutionA = formatResolution(state.infoA.video);
   const resolutionB = formatResolution(state.infoB.video);
-  const resolutionLabel = resolutionA !== resolutionB ? `${resolutionA} vs ${resolutionB}` : resolutionA;
   const oddSize =
     (state.infoA.video?.height && state.infoA.video.height % 2 !== 0) ||
     (state.infoB.video?.height && state.infoB.video.height % 2 !== 0) ||
@@ -185,6 +233,7 @@ async function browseFile(target) {
   if (typeof path === 'string') {
     if (target === 'a') elements.pathA.value = path;
     if (target === 'b') elements.pathB.value = path;
+    loadPreviews();
   }
 }
 
@@ -242,10 +291,14 @@ function numberValue(input) {
   return Number.isNaN(num) ? null : num;
 }
 
-function validateExport(inputPath, outputPath) {
-  if (!inputPath) return 'Select an input file (Input A or B).';
+function validateExport(inputPathA, inputPathB, outputPath, mode) {
+  if (mode === 'input-a' && !inputPathA) return 'Select an Input A file.';
+  if (mode === 'input-b' && !inputPathB) return 'Select an Input B file.';
+  if (mode === 'side-by-side' && (!inputPathA || !inputPathB)) {
+    return 'Side-by-side export needs both Input A and Input B.';
+  }
   if (!outputPath) return 'Choose an output file.';
-  if (inputPath === outputPath) return 'Output must be different from input.';
+  if (inputPathA === outputPath || inputPathB === outputPath) return 'Output must be different from input.';
   return null;
 }
 
@@ -255,16 +308,20 @@ async function startExport() {
     return;
   }
 
-  const inputPath = elements.pathA.value || elements.pathB.value;
+  const inputPathA = elements.pathA.value.trim();
+  const inputPathB = elements.pathB.value.trim();
+  const exportMode = elements.exportMode.value;
   const outputPath = elements.outputPath.value.trim();
-  const error = validateExport(inputPath, outputPath);
+  const error = validateExport(inputPathA, inputPathB, outputPath, exportMode);
   if (error) {
     setStatus(error);
     return;
   }
 
   const payload = {
-    inputPath,
+    inputPathA,
+    inputPathB,
+    exportMode,
     outputPath,
     codec: elements.codec.value,
     crf: Number(elements.crf.value),
@@ -295,8 +352,6 @@ async function startExport() {
     const result = await tauri.core.invoke('export_video', payload);
     state.exportId = result.export_id;
     state.exportOutput = result.output_path;
-    state.ffmpegCommand = result.command;
-    elements.command.textContent = result.command;
     setStatus('Export started.', false);
   } catch (err) {
     elements.cancelButton.disabled = true;
@@ -316,19 +371,9 @@ async function cancelExport() {
   }
 }
 
-async function copyCommand() {
-  if (!state.ffmpegCommand) return;
-  try {
-    await navigator.clipboard.writeText(state.ffmpegCommand);
-    setStatus('ffmpeg command copied.', false);
-  } catch (err) {
-    setStatus('Failed to copy command.');
-  }
-}
-
 async function openOutputFolder() {
   if (!state.exportOutput || !tauri?.opener) return;
-  const folder = state.exportOutput.replace(/[/\\\\][^/\\\\]+$/, '');
+  const folder = state.exportOutput.replace(/[/\\][^/\\]+$/, '');
   await tauri.opener.open(folder);
 }
 
@@ -342,10 +387,13 @@ function setupListeners() {
   });
 
   document.querySelector('[data-action="compare"]').addEventListener('click', renderCompare);
+  document.querySelector('[data-action="load-previews"]').addEventListener('click', loadPreviews);
+  document.querySelector('[data-action="play-both"]').addEventListener('click', playBoth);
+  document.querySelector('[data-action="pause-both"]').addEventListener('click', pauseBoth);
+  document.querySelector('[data-action="reset-both"]').addEventListener('click', resetBoth);
   document.querySelector('[data-action="output-browse"]').addEventListener('click', browseOutput);
   document.querySelector('[data-action="export"]').addEventListener('click', startExport);
   elements.cancelButton.addEventListener('click', cancelExport);
-  document.querySelector('[data-action="copy-command"]').addEventListener('click', copyCommand);
   elements.openOutputButton.addEventListener('click', openOutputFolder);
 
   elements.container.addEventListener('change', updateOutputPathExtension);
@@ -364,6 +412,7 @@ function setupListeners() {
       if (file?.path) {
         if (id === 'input-a') elements.pathA.value = file.path;
         if (id === 'input-b') elements.pathB.value = file.path;
+        loadPreviews();
       }
     });
   });
@@ -374,7 +423,7 @@ function setupListeners() {
       if (export_id !== state.exportId) return;
       if (out_time_ms) {
         const seconds = out_time_ms / 1000000;
-        elements.progressText.textContent = `Processed ${seconds.toFixed(1)}s`; 
+        elements.progressText.textContent = `Processed ${seconds.toFixed(1)}s`;
       }
       if (progress === 'end') {
         elements.progress.value = 100;

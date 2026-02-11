@@ -2,6 +2,12 @@
 
 A Windows-focused Tauri app for inspecting and comparing video files, plus exporting/transcoding via bundled ffmpeg.
 
+## What this app now supports
+
+- Play Input A and Input B previews at the same time for visual comparison.
+- Export Input A by itself, Input B by itself, or a combined side-by-side output.
+- Build a standalone Windows executable/installer via Tauri (`cargo tauri build`).
+
 ## Setup
 
 1. Install bundled ffmpeg binaries (copies into `src-tauri/binaries/`):
@@ -32,4 +38,4 @@ Then build the installer/exe:
 cargo tauri build
 ```
 
-The release bundle uses `src-tauri/binaries/ffmpeg.exe` and `src-tauri/binaries/ffprobe.exe` from the app resources. A pre-build script checks for these binaries before bundling.
+The release bundle uses `src-tauri/binaries/ffmpeg.exe` and `src-tauri/binaries/ffprobe.exe` from the app resources. A pre-build script checks for these binaries before bundling. After a successful build, run the generated `.exe` from `src-tauri/target/release/bundle/`.
