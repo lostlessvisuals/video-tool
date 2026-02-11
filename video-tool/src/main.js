@@ -1,4 +1,4 @@
-const tauri = window.__TAURI__;
+﻿const tauri = window.__TAURI__;
 
 const state = {
   infoA: null,
@@ -10,11 +10,13 @@ const state = {
 const elements = {
   pathA: document.querySelector('[data-field="path-a"]'),
   pathB: document.querySelector('[data-field="path-b"]'),
-  resultsA: document.querySelector('[data-results="a"]'),
-  resultsB: document.querySelector('[data-results="b"]'),
   compareGrid: document.querySelector('#compare-grid'),
   previewA: document.querySelector('[data-field="preview-a"]'),
   previewB: document.querySelector('[data-field="preview-b"]'),
+  previewFrameA: document.querySelector('[data-field="preview-frame-a"]'),
+  previewFrameB: document.querySelector('[data-field="preview-frame-b"]'),
+  filenameA: document.querySelector('[data-field="filename-a"]'),
+  filenameB: document.querySelector('[data-field="filename-b"]'),
   outputPath: document.querySelector('[data-field="output-path"]'),
   exportMode: document.querySelector('[data-field="export-mode"]'),
   container: document.querySelector('[data-field="container"]'),
@@ -24,11 +26,8 @@ const elements = {
   resizeHeight: document.querySelector('[data-field="resize-height"]'),
   keepAspect: document.querySelector('[data-field="keep-aspect"]'),
   fps: document.querySelector('[data-field="fps"]'),
-  trimStartSec: document.querySelector('[data-field="trim-start-sec"]'),
-  trimDurationSec: document.querySelector('[data-field="trim-duration-sec"]'),
   trimStartFrame: document.querySelector('[data-field="trim-start-frame"]'),
-  trimFrameCount: document.querySelector('[data-field="trim-frame-count"]'),
-  shortenFrames: document.querySelector('[data-field="shorten-frames"]'),
+  trimEndFrame: document.querySelector('[data-field="trim-end-frame"]'),
   audioCopy: document.querySelector('[data-field="audio-copy"]'),
   progress: document.querySelector('progress'),
   progressText: document.querySelector('[data-field="progress-text"]'),
@@ -50,14 +49,41 @@ function toVideoSrc(path) {
   return `file://${path.replace(/\\/g, '/')}`;
 }
 
+function fileNameFromPath(path) {
+  if (!path) return '';
+  const parts = path.split(/[/\\]/);
+  return parts[parts.length - 1] || path;
+}
+
+function updateFileNames() {
+  const nameA = fileNameFromPath(elements.pathA.value);
+  const nameB = fileNameFromPath(elements.pathB.value);
+  if (elements.filenameA) {
+    elements.filenameA.textContent = nameA || 'Input A';
+  }
+  if (elements.filenameB) {
+    elements.filenameB.textContent = nameB || 'Input B';
+  }
+  if (nameA && nameB && nameA === nameB) {
+    if (elements.filenameA) elements.filenameA.textContent = `${nameA} (1)`;
+    if (elements.filenameB) elements.filenameB.textContent = `${nameB} (2)`;
+  }
+}
+
 function loadPreviews() {
   if (elements.pathA.value) {
     elements.previewA.src = toVideoSrc(elements.pathA.value);
+    elements.previewA.dataset.sourcePath = elements.pathA.value;
+    updateFileNames();
     elements.previewA.load();
+    probe('a');
   }
   if (elements.pathB.value) {
     elements.previewB.src = toVideoSrc(elements.pathB.value);
+    elements.previewB.dataset.sourcePath = elements.pathB.value;
+    updateFileNames();
     elements.previewB.load();
+    probe('b');
   }
 }
 
@@ -91,130 +117,114 @@ function resetBoth() {
   }
 }
 
-function formatMaybe(value, fallback = '—') {
+function formatMaybe(value, fallback = '-') {
   if (value === null || value === undefined || value === '') return fallback;
   return value;
 }
 
 function formatBitrate(value) {
-  if (!value) return '—';
+  if (!value) return '-';
   const kbps = Number(value) / 1000;
   if (Number.isNaN(kbps)) return value;
   return `${kbps.toFixed(0)} kbps`;
 }
 
 function formatDuration(value) {
-  if (!value && value !== 0) return '—';
+  if (!value && value !== 0) return '-';
   const seconds = Number(value);
   if (Number.isNaN(seconds)) return value;
   return `${seconds.toFixed(2)} s`;
 }
 
 function formatResolution(video) {
-  if (!video?.width || !video?.height) return '—';
-  return `${video.width}×${video.height}`;
+  if (!video?.width || !video?.height) return '-';
+  return `${video.width}x${video.height}`;
 }
 
-function renderResults(container, info) {
-  if (!info) {
-    container.innerHTML = '<div class="placeholder">No probe results yet.</div>';
-    return;
+function formatBytes(value) {
+  if (value === null || value === undefined) return '-';
+  const num = Number(value);
+  if (Number.isNaN(num)) return value;
+  if (num < 1024) return `${num} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let size = num;
+  let unitIndex = -1;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
   }
-
-  const rows = [
-    ['File', info.file],
-    ['Size', info.size_bytes ? `${info.size_bytes} bytes` : '—'],
-    ['Container', formatMaybe(info.container.format_name)],
-    ['Duration', formatDuration(info.container.duration_sec)],
-    ['Bitrate', formatBitrate(info.container.bitrate)],
-    ['Video Codec', formatMaybe(info.video?.codec_name)],
-    ['Profile', formatMaybe(info.video?.profile)],
-    ['Resolution', formatResolution(info.video)],
-    ['Pixel Format', formatMaybe(info.video?.pix_fmt)],
-    ['Color Space', formatMaybe(info.video?.color_space)],
-    ['Frame Rate', info.video?.fps ? `${info.video.fps.toFixed(3)} fps` : '—'],
-    ['Frame Count', formatMaybe(info.video?.frame_count)],
-    ['Audio Codec', formatMaybe(info.audio?.codec_name)],
-    ['Channels', formatMaybe(info.audio?.channels)],
-    ['Sample Rate', info.audio?.sample_rate ? `${info.audio.sample_rate} Hz` : '—'],
-    ['Audio Bitrate', formatBitrate(info.audio?.bit_rate)],
-  ];
-
-  container.innerHTML = `
-    <table>
-      <tbody>
-        ${rows
-          .map(
-            ([label, value]) => `
-              <tr>
-                <td>${label}</td>
-                <td>${value ?? '—'}</td>
-              </tr>
-            `,
-          )
-          .join('')}
-      </tbody>
-    </table>
-  `;
+  return `${size.toFixed(2)} ${units[unitIndex]}`;
 }
 
-function computeDiffs(infoA, infoB) {
-  const fields = [
-    ['Resolution', formatResolution(infoA.video), formatResolution(infoB.video)],
-    ['FPS', infoA.video?.fps?.toFixed(3), infoB.video?.fps?.toFixed(3)],
-    ['Duration', formatDuration(infoA.container.duration_sec), formatDuration(infoB.container.duration_sec)],
-    ['Frame Count', infoA.video?.frame_count, infoB.video?.frame_count],
-    ['Codec', infoA.video?.codec_name, infoB.video?.codec_name],
-    ['Bitrate', formatBitrate(infoA.video?.bit_rate), formatBitrate(infoB.video?.bit_rate)],
-    ['Pixel Format', infoA.video?.pix_fmt, infoB.video?.pix_fmt],
-  ];
-
-  return fields.map(([label, a, b]) => {
-    const same = String(a ?? '') === String(b ?? '');
-    return { label, a: a ?? '—', b: b ?? '—', same };
-  });
+function setPreviewAspect(target, info) {
+  if (target === 'a' && elements.previewFrameA) {
+    elements.previewFrameA.dataset.hasInfo = info ? 'true' : 'false';
+  }
+  if (target === 'b' && elements.previewFrameB) {
+    elements.previewFrameB.dataset.hasInfo = info ? 'true' : 'false';
+  }
 }
 
 function renderCompare() {
-  if (!state.infoA || !state.infoB) {
+  if (!state.infoA && !state.infoB) {
     elements.compareGrid.innerHTML = '<div class="placeholder">Load Input A and B to compare.</div>';
     return;
   }
 
-  const diffs = computeDiffs(state.infoA, state.infoB);
-  const resolutionA = formatResolution(state.infoA.video);
-  const resolutionB = formatResolution(state.infoB.video);
-  const oddSize =
-    (state.infoA.video?.height && state.infoA.video.height % 2 !== 0) ||
-    (state.infoB.video?.height && state.infoB.video.height % 2 !== 0) ||
-    (state.infoA.video?.width && state.infoA.video.width % 2 !== 0) ||
-    (state.infoB.video?.width && state.infoB.video.width % 2 !== 0);
+  const infoA = state.infoA;
+  const infoB = state.infoB;
 
-  const extra = oddSize ? ' (odd dimensions detected)' : '';
+  const rows = [
+    ['File', fileNameFromPath(infoA?.file), fileNameFromPath(infoB?.file)],
+    ['Size', formatBytes(infoA?.size_bytes), formatBytes(infoB?.size_bytes)],
+    ['Container', formatMaybe(infoA?.container?.format_name), formatMaybe(infoB?.container?.format_name)],
+    ['Duration', formatDuration(infoA?.container?.duration_sec), formatDuration(infoB?.container?.duration_sec)],
+    ['Bitrate', formatBitrate(infoA?.container?.bitrate), formatBitrate(infoB?.container?.bitrate)],
+    ['Video Codec', formatMaybe(infoA?.video?.codec_name), formatMaybe(infoB?.video?.codec_name)],
+    ['Profile', formatMaybe(infoA?.video?.profile), formatMaybe(infoB?.video?.profile)],
+    ['Resolution', formatResolution(infoA?.video), formatResolution(infoB?.video)],
+    ['Pixel Format', formatMaybe(infoA?.video?.pix_fmt), formatMaybe(infoB?.video?.pix_fmt)],
+    ['Color Space', formatMaybe(infoA?.video?.color_space), formatMaybe(infoB?.video?.color_space)],
+    [
+      'Frame Rate',
+      infoA?.video?.fps ? `${infoA.video.fps.toFixed(3)} fps` : '-',
+      infoB?.video?.fps ? `${infoB.video.fps.toFixed(3)} fps` : '-',
+    ],
+    ['Frame Count', formatMaybe(infoA?.video?.frame_count), formatMaybe(infoB?.video?.frame_count)],
+    ['Audio Codec', formatMaybe(infoA?.audio?.codec_name), formatMaybe(infoB?.audio?.codec_name)],
+    ['Channels', formatMaybe(infoA?.audio?.channels), formatMaybe(infoB?.audio?.channels)],
+    [
+      'Sample Rate',
+      infoA?.audio?.sample_rate ? `${infoA.audio.sample_rate} Hz` : '-',
+      infoB?.audio?.sample_rate ? `${infoB.audio.sample_rate} Hz` : '-',
+    ],
+    ['Audio Bitrate', formatBitrate(infoA?.audio?.bit_rate), formatBitrate(infoB?.audio?.bit_rate)],
+  ];
 
   elements.compareGrid.innerHTML = `
     <table>
+      <colgroup>
+        <col style="width: 220px" />
+        <col />
+        <col />
+      </colgroup>
       <tbody>
         <tr>
           <td>Field</td>
           <td>Input A</td>
           <td>Input B</td>
         </tr>
-        <tr>
-          <td>Resolution label</td>
-          <td class="${resolutionA === resolutionB ? 'same' : 'diff'}">${resolutionA}${extra}</td>
-          <td class="${resolutionA === resolutionB ? 'same' : 'diff'}">${resolutionB}${extra}</td>
-        </tr>
-        ${diffs
-          .map(
-            ({ label, a, b, same }) => `
+        ${rows
+          .map(([label, a, b]) => {
+            const same = String(a ?? '') === String(b ?? '');
+            return `
               <tr>
                 <td>${label}</td>
-                <td class="${same ? 'same' : 'diff'}">${a}</td>
-                <td class="${same ? 'same' : 'diff'}">${b}</td>
+                <td class="${same ? 'same' : 'diff'}">${a ?? '-'}</td>
+                <td class="${same ? 'same' : 'diff'}">${b ?? '-'}</td>
               </tr>
-            `,
-          )
+            `;
+          })
           .join('')}
       </tbody>
     </table>
@@ -237,6 +247,80 @@ async function browseFile(target) {
   }
 }
 
+function suggestOutputPath(inputPath) {
+  if (!inputPath) return '';
+  const ext = elements.container.value || 'mp4';
+  const base = inputPath.replace(/\.[^/.]+$/, '');
+  return `${base}_export.${ext}`;
+}
+
+function applyExportDefaultsFromInfo(info, target) {
+  if (!info) return;
+  const mode = elements.exportMode.value;
+  if (mode === 'input-a' && target !== 'a') return;
+  if (mode === 'input-b' && target !== 'b') return;
+
+  if (!elements.outputPath.value.trim()) {
+    elements.outputPath.value = suggestOutputPath(info.file);
+  }
+
+  if (info.video?.width) elements.resizeWidth.value = info.video.width;
+  if (info.video?.height) elements.resizeHeight.value = info.video.height;
+  if (info.video?.fps) elements.fps.value = info.video.fps.toFixed(3);
+  if (elements.trimStartFrame.value.trim() === '') elements.trimStartFrame.value = '0';
+  if (elements.trimEndFrame.value.trim() === '' && info.video?.frame_count) {
+    elements.trimEndFrame.value = String(info.video.frame_count);
+  }
+}
+
+function getActiveAspectRatio() {
+  const mode = elements.exportMode.value;
+  if (mode === 'input-a' && state.infoA?.video?.width && state.infoA?.video?.height) {
+    return state.infoA.video.width / state.infoA.video.height;
+  }
+  if (mode === 'input-b' && state.infoB?.video?.width && state.infoB?.video?.height) {
+    return state.infoB.video.width / state.infoB.video.height;
+  }
+  return null;
+}
+
+function updateLinkedResize(changed) {
+  if (!elements.keepAspect.checked) return;
+  const ratio = getActiveAspectRatio();
+  if (!ratio) return;
+
+  if (changed === 'width') {
+    const width = numberValue(elements.resizeWidth);
+    if (width) elements.resizeHeight.value = Math.max(1, Math.round(width / ratio));
+  } else if (changed === 'height') {
+    const height = numberValue(elements.resizeHeight);
+    if (height) elements.resizeWidth.value = Math.max(1, Math.round(height * ratio));
+  }
+}
+
+function updateExportModeUI() {
+  const isSideBySide = elements.exportMode.value === 'side-by-side';
+  const controls = [
+    elements.resizeWidth,
+    elements.resizeHeight,
+    elements.keepAspect,
+    elements.fps,
+    elements.trimStartFrame,
+    elements.trimEndFrame,
+  ];
+  for (const control of controls) {
+    if (!control) continue;
+    control.disabled = isSideBySide;
+  }
+  if (isSideBySide) {
+    elements.resizeWidth.value = '';
+    elements.resizeHeight.value = '';
+    elements.fps.value = '';
+    elements.trimStartFrame.value = '';
+    elements.trimEndFrame.value = '';
+  }
+}
+
 async function probe(target) {
   const path = target === 'a' ? elements.pathA.value : elements.pathB.value;
   if (!path) {
@@ -252,11 +336,11 @@ async function probe(target) {
     const info = await tauri.core.invoke('probe_video', { path });
     if (target === 'a') {
       state.infoA = info;
-      renderResults(elements.resultsA, info);
     } else {
       state.infoB = info;
-      renderResults(elements.resultsB, info);
     }
+    setPreviewAspect(target, info);
+    applyExportDefaultsFromInfo(info, target);
     renderCompare();
   } catch (error) {
     setStatus(String(error));
@@ -302,6 +386,18 @@ function validateExport(inputPathA, inputPathB, outputPath, mode) {
   return null;
 }
 
+function evenize(value) {
+  if (!value) return value;
+  return value % 2 === 0 ? value : value - 1;
+}
+
+function computeStackHeight() {
+  const heightA = state.infoA?.video?.height ?? null;
+  const heightB = state.infoB?.video?.height ?? null;
+  if (!heightA || !heightB) return null;
+  return evenize(Math.min(heightA, heightB));
+}
+
 async function startExport() {
   if (!tauri?.core) {
     setStatus('Tauri invoke API not available.');
@@ -318,6 +414,20 @@ async function startExport() {
     return;
   }
 
+  const isSideBySide = exportMode === 'side-by-side';
+
+  const stackHeight = isSideBySide ? computeStackHeight() : null;
+  if (isSideBySide) {
+    if (!state.infoA || !state.infoB) {
+      setStatus('Load both inputs before exporting side-by-side.');
+      return;
+    }
+    if (!stackHeight) {
+      setStatus('Unable to determine matching heights for side-by-side export.');
+      return;
+    }
+  }
+
   const payload = {
     inputPathA,
     inputPathB,
@@ -325,16 +435,14 @@ async function startExport() {
     outputPath,
     codec: elements.codec.value,
     crf: Number(elements.crf.value),
-    resizeWidth: numberValue(elements.resizeWidth),
-    resizeHeight: numberValue(elements.resizeHeight),
+    resizeWidth: isSideBySide ? null : numberValue(elements.resizeWidth),
+    resizeHeight: isSideBySide ? null : numberValue(elements.resizeHeight),
     keepAspect: elements.keepAspect.checked,
-    fps: numberValue(elements.fps),
-    trimStartSec: numberValue(elements.trimStartSec),
-    trimDurationSec: numberValue(elements.trimDurationSec),
-    trimStartFrame: numberValue(elements.trimStartFrame),
-    trimFrameCount: numberValue(elements.trimFrameCount),
-    shortenToFrames: numberValue(elements.shortenFrames),
+    fps: isSideBySide ? null : numberValue(elements.fps),
+    trimStartFrame: isSideBySide ? null : numberValue(elements.trimStartFrame),
+    trimEndFrame: isSideBySide ? null : numberValue(elements.trimEndFrame),
     audioCopy: elements.audioCopy.checked,
+    stackHeight,
   };
 
   if (payload.resizeWidth && payload.resizeWidth % 2 !== 0) {
@@ -349,7 +457,7 @@ async function startExport() {
     elements.openOutputButton.disabled = true;
     elements.progress.value = 0;
     elements.progressText.textContent = 'Starting export...';
-    const result = await tauri.core.invoke('export_video', payload);
+    const result = await tauri.core.invoke('export_video', { params: payload });
     state.exportId = result.export_id;
     state.exportOutput = result.output_path;
     setStatus('Export started.', false);
@@ -372,9 +480,20 @@ async function cancelExport() {
 }
 
 async function openOutputFolder() {
-  if (!state.exportOutput || !tauri?.opener) return;
-  const folder = state.exportOutput.replace(/[/\\][^/\\]+$/, '');
-  await tauri.opener.open(folder);
+  if (!state.exportOutput) return;
+  try {
+    if (tauri?.opener?.open) {
+      await tauri.opener.open(state.exportOutput);
+      return;
+    }
+    if (tauri?.core?.invoke) {
+      await tauri.core.invoke('plugin:opener|reveal_item_in_dir', { paths: [state.exportOutput] });
+      return;
+    }
+    setStatus('Open folder is unavailable in this build.');
+  } catch (err) {
+    setStatus(`Failed to open output folder: ${String(err)}`);
+  }
 }
 
 function setupListeners() {
@@ -382,12 +501,6 @@ function setupListeners() {
     button.addEventListener('click', () => browseFile(button.dataset.target));
   });
 
-  document.querySelectorAll('[data-action="probe"]').forEach((button) => {
-    button.addEventListener('click', () => probe(button.dataset.target));
-  });
-
-  document.querySelector('[data-action="compare"]').addEventListener('click', renderCompare);
-  document.querySelector('[data-action="load-previews"]').addEventListener('click', loadPreviews);
   document.querySelector('[data-action="play-both"]').addEventListener('click', playBoth);
   document.querySelector('[data-action="pause-both"]').addEventListener('click', pauseBoth);
   document.querySelector('[data-action="reset-both"]').addEventListener('click', resetBoth);
@@ -397,6 +510,18 @@ function setupListeners() {
   elements.openOutputButton.addEventListener('click', openOutputFolder);
 
   elements.container.addEventListener('change', updateOutputPathExtension);
+  elements.exportMode.addEventListener('change', () => {
+    updateExportModeUI();
+    if (elements.exportMode.value === 'input-a' && state.infoA) {
+      applyExportDefaultsFromInfo(state.infoA, 'a');
+    }
+    if (elements.exportMode.value === 'input-b' && state.infoB) {
+      applyExportDefaultsFromInfo(state.infoB, 'b');
+    }
+  });
+
+  elements.resizeWidth.addEventListener('input', () => updateLinkedResize('width'));
+  elements.resizeHeight.addEventListener('input', () => updateLinkedResize('height'));
 
   ['input-a', 'input-b'].forEach((id) => {
     const panel = document.getElementById(id);
@@ -417,10 +542,35 @@ function setupListeners() {
     });
   });
 
+  elements.pathA.addEventListener('change', () => {
+    updateFileNames();
+    loadPreviews();
+  });
+  elements.pathB.addEventListener('change', () => {
+    updateFileNames();
+    loadPreviews();
+  });
+
+  [elements.previewA, elements.previewB].forEach((video) => {
+    if (!video) return;
+    video.addEventListener('error', () => {
+      const src = video.dataset.sourcePath || video.currentSrc || video.src || 'unknown';
+      const detail = video.error ? ` (code ${video.error.code})` : '';
+      setStatus(`Preview failed to load: ${src}${detail}`);
+    });
+  });
+
   if (tauri?.event?.listen) {
     tauri.event.listen('export-progress', (event) => {
-      const { export_id, progress, out_time_ms } = event.payload;
+      const { export_id, progress, out_time_ms, message } = event.payload;
       if (export_id !== state.exportId) return;
+      if (progress === 'error') {
+        elements.progressText.textContent = 'Failed';
+        elements.cancelButton.disabled = true;
+        const detail = message ? `: ${message}` : '.';
+        setStatus(`Export failed${detail}`);
+        return;
+      }
       if (out_time_ms) {
         const seconds = out_time_ms / 1000000;
         elements.progressText.textContent = `Processed ${seconds.toFixed(1)}s`;
@@ -430,6 +580,7 @@ function setupListeners() {
         elements.progressText.textContent = 'Done';
         elements.cancelButton.disabled = true;
         elements.openOutputButton.disabled = false;
+        setStatus('Export complete.', false);
       } else {
         const nextValue = Math.min(95, elements.progress.value + 1);
         elements.progress.value = nextValue;
@@ -439,9 +590,8 @@ function setupListeners() {
 }
 
 function init() {
-  renderResults(elements.resultsA, null);
-  renderResults(elements.resultsB, null);
   renderCompare();
+  updateExportModeUI();
   setupListeners();
 }
 

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::fs;
-use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::io::{BufRead, BufReader, Read};
+use std::os::windows::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -69,6 +70,7 @@ struct ExportProgress {
     export_id: String,
     progress: String,
     out_time_ms: Option<u64>,
+    message: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -84,13 +86,13 @@ struct ExportParams {
     resize_height: Option<u32>,
     keep_aspect: bool,
     fps: Option<f64>,
-    trim_start_sec: Option<f64>,
-    trim_duration_sec: Option<f64>,
     trim_start_frame: Option<u64>,
-    trim_frame_count: Option<u64>,
-    shorten_to_frames: Option<u64>,
+    trim_end_frame: Option<u64>,
     audio_copy: bool,
+    stack_height: Option<u32>,
 }
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 fn resolve_bundled_binary(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
     let dev_path = PathBuf::from("binaries").join(name);
@@ -162,6 +164,34 @@ fn format_arg(value: &str) -> String {
     } else {
         value.to_string()
     }
+}
+
+fn unique_output_path(path: &str) -> String {
+    let candidate = Path::new(path);
+    if !candidate.exists() {
+        return path.to_string();
+    }
+
+    let parent = candidate.parent().unwrap_or_else(|| Path::new(""));
+    let stem = candidate
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("output");
+    let ext = candidate.extension().and_then(|e| e.to_str());
+
+    for index in 1..1000 {
+        let file_name = if let Some(ext) = ext {
+            format!("{stem} ({index}).{ext}")
+        } else {
+            format!("{stem} ({index})")
+        };
+        let next = parent.join(file_name);
+        if !next.exists() {
+            return next.to_string_lossy().to_string();
+        }
+    }
+
+    path.to_string()
 }
 
 #[tauri::command]
@@ -328,12 +358,8 @@ fn export_video(
         _ => return Err("Unknown export mode.".to_string()),
     };
 
+    let output_path = unique_output_path(&params.output_path);
     let mut args: Vec<String> = Vec::new();
-
-    if let Some(start) = params.trim_start_sec {
-        args.push("-ss".to_string());
-        args.push(format!("{}", start));
-    }
 
     args.push("-i".to_string());
     args.push(primary_input.to_string());
@@ -345,16 +371,12 @@ fn export_video(
         args.push(second.to_string());
     }
 
-    if let Some(duration) = params.trim_duration_sec {
-        args.push("-t".to_string());
-        args.push(format!("{}", duration));
-    }
-
     let mut filters: Vec<String> = Vec::new();
     let mut uses_select = false;
 
-    if let (Some(start), Some(count)) = (params.trim_start_frame, params.trim_frame_count) {
-        let end = start.saturating_add(count.saturating_sub(1));
+    if let Some(end) = params.trim_end_frame {
+        let start = params.trim_start_frame.unwrap_or(0);
+        let end = end.max(start);
         filters.push(format!(
             "select=between(n\\,{start}\\,{end}),setpts=N/FRAME_RATE/TB"
         ));
@@ -382,29 +404,31 @@ fn export_video(
     }
 
     if export_mode == "side-by-side" {
-        let mut complex_filter = String::new();
+        let mut left_filters: Vec<String> = Vec::new();
+        let mut right_filters: Vec<String> = Vec::new();
+
         if !filters.is_empty() {
-            complex_filter.push_str(&format!("[0:v]{}[left];", filters.join(",")));
-            complex_filter.push_str("[1:v]");
-            if params.resize_width.is_some() || params.resize_height.is_some() {
-                let width = params
-                    .resize_width
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "-1".into());
-                let height = params
-                    .resize_height
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "-1".into());
-                let mut right_scale = format!("scale={width}:{height}:flags=lanczos");
-                if params.keep_aspect {
-                    right_scale.push_str(":force_original_aspect_ratio=decrease");
-                }
-                complex_filter.push_str(&right_scale);
-            }
-            complex_filter.push_str("[right];[left][right]hstack=inputs=2[vout]");
-        } else {
-            complex_filter.push_str("[0:v][1:v]hstack=inputs=2[vout]");
+            left_filters.extend(filters.clone());
+            right_filters.extend(filters.clone());
         }
+
+        if let Some(height) = params.stack_height {
+            left_filters.push(format!("scale=-1:{height}"));
+            right_filters.push(format!("scale=-1:{height}"));
+        }
+
+        let mut complex_filter = String::new();
+        if !left_filters.is_empty() {
+            complex_filter.push_str(&format!("[0:v]{}[left];", left_filters.join(",")));
+        } else {
+            complex_filter.push_str("[0:v]null[left];");
+        }
+        if !right_filters.is_empty() {
+            complex_filter.push_str(&format!("[1:v]{}[right];", right_filters.join(",")));
+        } else {
+            complex_filter.push_str("[1:v]null[right];");
+        }
+        complex_filter.push_str("[left][right]hstack=inputs=2[vout]");
         args.push("-filter_complex".to_string());
         args.push(complex_filter);
         args.push("-map".to_string());
@@ -421,11 +445,6 @@ fn export_video(
     if uses_select {
         args.push("-vsync".to_string());
         args.push("vfr".to_string());
-    }
-
-    if let Some(frames) = params.shorten_to_frames {
-        args.push("-frames:v".to_string());
-        args.push(frames.to_string());
     }
 
     match params.codec.as_str() {
@@ -454,12 +473,13 @@ fn export_video(
     args.push("-progress".to_string());
     args.push("pipe:1".to_string());
     args.push("-nostats".to_string());
-    args.push(params.output_path.clone());
+    args.push(output_path.clone());
 
     let command_string = build_command_string(&ffmpeg, &args);
 
     let mut child = Command::new(ffmpeg)
         .args(&args)
+        .creation_flags(CREATE_NO_WINDOW)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -469,6 +489,10 @@ fn export_video(
         .stdout
         .take()
         .ok_or_else(|| "Failed to capture ffmpeg stdout".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Failed to capture ffmpeg stderr".to_string())?;
 
     let export_id = Uuid::new_v4().to_string();
     {
@@ -480,6 +504,17 @@ fn export_video(
 
     let export_id_for_thread = export_id.clone();
     let children = export_manager.children.clone();
+    let stderr_buffer = Arc::new(Mutex::new(String::new()));
+    let stderr_clone = stderr_buffer.clone();
+    thread::spawn(move || {
+        let mut reader = BufReader::new(stderr);
+        let mut buffer = String::new();
+        let _ = reader.read_to_string(&mut buffer);
+        if let Ok(mut slot) = stderr_clone.lock() {
+            *slot = buffer;
+        }
+    });
+
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
         let mut out_time_ms: Option<u64> = None;
@@ -494,6 +529,7 @@ fn export_video(
                         export_id: export_id_for_thread.clone(),
                         progress: value.to_string(),
                         out_time_ms,
+                        message: None,
                     };
                     let _ = app_handle.emit("export-progress", payload);
                 }
@@ -502,7 +538,29 @@ fn export_video(
 
         if let Ok(mut map) = children.lock() {
             if let Some(mut child) = map.remove(&export_id_for_thread) {
-                let _ = child.wait();
+                let status = child.wait();
+                if let Ok(status) = status {
+                    if !status.success() {
+                        let message = stderr_buffer
+                            .lock()
+                            .ok()
+                            .and_then(|data| {
+                                let trimmed = data.trim();
+                                if trimmed.is_empty() {
+                                    None
+                                } else {
+                                    Some(trimmed.lines().take(6).collect::<Vec<_>>().join("\n"))
+                                }
+                            });
+                        let payload = ExportProgress {
+                            export_id: export_id_for_thread.clone(),
+                            progress: "error".to_string(),
+                            out_time_ms: None,
+                            message,
+                        };
+                        let _ = app_handle.emit("export-progress", payload);
+                    }
+                }
             }
         }
     });
@@ -510,7 +568,7 @@ fn export_video(
     Ok(ExportStarted {
         export_id,
         command: command_string,
-        output_path: params.output_path,
+        output_path,
     })
 }
 

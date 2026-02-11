@@ -10,7 +10,7 @@
   <body>
     <div class="app">
       <header class="app-header">
-        <h1>Video Tool</h1>
+        <h1 class="pixel-title">PixelDuel</h1>
         <p>Inspect, compare, and export videos with bundled ffmpeg.</p>
       </header>
 
@@ -20,16 +20,12 @@
             <h2>Input A</h2>
             <div class="panel-actions">
               <button data-action="browse" data-target="a">Pick File</button>
-              <button data-action="probe" data-target="a">Probe</button>
             </div>
           </div>
           <label class="field">
             <span>Path</span>
             <input type="text" data-field="path-a" placeholder="Select a video file" />
           </label>
-          <div class="results" data-results="a">
-            <div class="placeholder">No probe results yet.</div>
-          </div>
         </div>
 
         <div class="input-panel" id="input-b">
@@ -37,38 +33,36 @@
             <h2>Input B</h2>
             <div class="panel-actions">
               <button data-action="browse" data-target="b">Pick File</button>
-              <button data-action="probe" data-target="b">Probe</button>
             </div>
           </div>
           <label class="field">
             <span>Path</span>
             <input type="text" data-field="path-b" placeholder="Select a video file" />
           </label>
-          <div class="results" data-results="b">
-            <div class="placeholder">No probe results yet.</div>
-          </div>
         </div>
       </section>
 
       <section class="compare" id="compare">
         <div class="panel-header">
           <h2>Compare</h2>
-          <button data-action="compare">Compare</button>
         </div>
         <div class="preview-controls">
-          <button data-action="load-previews">Load Previews</button>
           <button data-action="play-both">Play Both</button>
           <button data-action="pause-both">Pause Both</button>
           <button data-action="reset-both">Reset</button>
         </div>
         <div class="preview-grid" id="preview-grid">
           <div class="preview-panel">
-            <h3>Input A Preview</h3>
-            <video data-field="preview-a" controls muted></video>
+            <h3 data-field="filename-a">Input A</h3>
+            <div class="preview-frame" data-field="preview-frame-a">
+              <video data-field="preview-a" controls muted></video>
+            </div>
           </div>
           <div class="preview-panel">
-            <h3>Input B Preview</h3>
-            <video data-field="preview-b" controls muted></video>
+            <h3 data-field="filename-b">Input B</h3>
+            <div class="preview-frame" data-field="preview-frame-b">
+              <video data-field="preview-b" controls muted></video>
+            </div>
           </div>
         </div>
         <div class="compare-grid" id="compare-grid">
@@ -81,13 +75,15 @@
           <h2>Export</h2>
         </div>
         <div class="export-grid">
-          <label class="field full">
-            <span>Output File</span>
-            <div class="row">
-              <input type="text" data-field="output-path" placeholder="Choose output file" />
-              <button data-action="output-browse">Browse</button>
-            </div>
-          </label>
+          <div class="export-top">
+            <label class="field">
+              <span>Output File</span>
+              <div class="row">
+                <input type="text" data-field="output-path" placeholder="Choose output file" />
+                <button data-action="output-browse">Browse</button>
+              </div>
+            </label>
+          </div>
           <label class="field">
             <span>Export Source</span>
             <select data-field="export-mode">
@@ -127,30 +123,20 @@
             <input type="checkbox" data-field="keep-aspect" checked />
             <span>Keep aspect (Lanczos)</span>
           </label>
-          <label class="field">
-            <span>Target FPS</span>
-            <input type="number" data-field="fps" min="1" step="0.01" placeholder="Keep" />
-          </label>
-          <label class="field">
-            <span>Trim Start (sec)</span>
-            <input type="number" data-field="trim-start-sec" min="0" step="0.01" placeholder="0" />
-          </label>
-          <label class="field">
-            <span>Trim Duration (sec)</span>
-            <input type="number" data-field="trim-duration-sec" min="0" step="0.01" placeholder="Full" />
-          </label>
-          <label class="field">
-            <span>Trim Start Frame</span>
-            <input type="number" data-field="trim-start-frame" min="0" placeholder="0" />
-          </label>
-          <label class="field">
-            <span>Trim Frame Count</span>
-            <input type="number" data-field="trim-frame-count" min="1" placeholder="All" />
-          </label>
-          <label class="field">
-            <span>Shorten to N Frames</span>
-            <input type="number" data-field="shorten-frames" min="1" placeholder="No cap" />
-          </label>
+          <div class="export-row">
+            <label class="field">
+              <span>Target FPS</span>
+              <input type="number" data-field="fps" min="1" step="0.01" placeholder="Keep" />
+            </label>
+            <label class="field">
+              <span>Trim Start Frame</span>
+              <input type="number" data-field="trim-start-frame" min="0" placeholder="0" />
+            </label>
+            <label class="field">
+              <span>Trim End Frame</span>
+              <input type="number" data-field="trim-end-frame" min="0" placeholder="End" />
+            </label>
+          </div>
           <label class="field checkbox">
             <input type="checkbox" data-field="audio-copy" />
             <span>Copy audio (no re-encode)</span>
@@ -166,6 +152,9 @@
           <span data-field="progress-text">Idle</span>
         </div>
         <div class="status" data-field="status"></div>
+        <a class="corner-credit" href="https://lostless.live" target="_blank" rel="noreferrer">
+          @lostless.visuals
+        </a>
       </section>
     </div>
   </body>

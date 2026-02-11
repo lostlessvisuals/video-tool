@@ -1,12 +1,24 @@
-# Video Tool
+# PixelDuel
 
-A Windows-focused Tauri app for inspecting and comparing video files, plus exporting/transcoding via bundled ffmpeg.
+PixelDuel is a Windows-focused Tauri app for inspecting, comparing, and exporting video files via bundled ffmpeg.
 
-## What this app now supports
+## Features
 
-- Play Input A and Input B previews at the same time for visual comparison.
-- Export Input A by itself, Input B by itself, or a combined side-by-side output.
-- Build a standalone Windows executable/installer via Tauri (`cargo tauri build`).
+- Load two videos via file picker or drag-and-drop (auto-probe on load).
+- Side-by-side previews with synchronized play/pause/reset controls.
+- Single comparison table: left-aligned field labels with centered values for each input.
+- Export modes: Input A only, Input B only, or side-by-side.
+- Export controls:
+  - Container: mp4/mov/mkv
+  - Codec: H.264 / H.265
+  - CRF
+  - Resize with aspect lock
+  - Target FPS
+  - Trim start/end frame
+  - Copy audio or re-encode AAC
+- Progress and status updates during export.
+- Output folder reveal after export.
+- Automatic output filename de-duplication (adds `(1)`, `(2)`, etc.).
 
 ## Setup
 
