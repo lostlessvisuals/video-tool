@@ -145,7 +145,7 @@ button:disabled {
 
 .results,
 .compare-grid,
-.command pre {
+.preview-panel {
   background: #0f172a;
   border: 1px solid #1f2937;
   border-radius: 8px;
@@ -193,6 +193,29 @@ button:disabled {
   gap: 12px;
 }
 
+.preview-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.preview-panel h3 {
+  margin: 0 0 8px 0;
+}
+
+.preview-panel video {
+  width: 100%;
+  max-height: 260px;
+  border-radius: 6px;
+  background: #020617;
+}
+
 .export-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -216,16 +239,6 @@ button:disabled {
 progress {
   width: 240px;
   height: 12px;
-}
-
-.command {
-  margin-top: 16px;
-}
-
-.command pre {
-  white-space: pre-wrap;
-  word-break: break-word;
-  min-height: 80px;
 }
 
 .status {
