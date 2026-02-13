@@ -128,7 +128,7 @@ fn label_filters(label: &str) -> Vec<String> {
         return Vec::new();
     }
 
-    let fontfile = resolve_font_file().map(escape_filter_value);
+    let fontfile = resolve_font_file().as_deref().map(escape_filter_value);
     let text = escape_drawtext(trimmed);
     let mut drawtext = String::new();
     if let Some(fontfile) = fontfile {
