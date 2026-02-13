@@ -105,7 +105,7 @@ fn resolve_font_file() -> Option<String> {
     ];
     for path in candidates {
         if Path::new(path).exists() {
-            return Some(path.to_string());
+            return Some(path.replace('\\', "/"));
         }
     }
     None
