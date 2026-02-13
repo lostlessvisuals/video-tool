@@ -1,10 +1,9 @@
 # PixelDuel
 
-## Downloads
-- Download the latest installer/exe from **GitHub Releases** (Assets).
-- The **Download ZIP** button is source-only and will not include large binaries (Git LFS pointers).
-
 PixelDuel is an open source Windows-focused Tauri app for inspecting, comparing, and exporting video files via bundled ffmpeg.
+
+## Download
+- Download the latest installer/exe from **GitHub Releases** (Assets).
 
 ## Features
 
