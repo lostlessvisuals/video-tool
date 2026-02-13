@@ -135,11 +135,11 @@ fn label_filters(label: &str) -> Vec<String> {
         drawtext.push_str(&format!("fontfile='{escaped}':"));
     }
     drawtext.push_str(&format!(
-        "text='{text}':fontcolor=white:fontsize=h*0.055:x=(w-text_w)/2:y=h-(text_h*1.6)"
+        "text='{text}':fontcolor=white:fontsize=h*0.05:x=(w-text_w)/2:y=h-60"
     ));
 
     vec![
-        "drawbox=x=0:y=ih*0.86:w=iw:h=ih*0.14:color=black@0.45:t=fill".to_string(),
+        "drawbox=x=0:y=ih-90:w=iw:h=90:color=black@0.45:t=fill".to_string(),
         format!("drawtext={drawtext}"),
     ]
 }

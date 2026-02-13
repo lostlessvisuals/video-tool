@@ -314,6 +314,8 @@ function updateExportModeUI() {
     if (!control) continue;
     control.disabled = isSideBySide;
   }
+  if (elements.labelA) elements.labelA.disabled = !isSideBySide;
+  if (elements.labelB) elements.labelB.disabled = !isSideBySide;
   if (isSideBySide) {
     elements.resizeWidth.value = '';
     elements.resizeHeight.value = '';
@@ -443,8 +445,8 @@ async function startExport() {
     fps: isSideBySide ? null : numberValue(elements.fps),
     trimStartFrame: isSideBySide ? null : numberValue(elements.trimStartFrame),
     trimEndFrame: isSideBySide ? null : numberValue(elements.trimEndFrame),
-    labelA: elements.labelA.value.trim(),
-    labelB: elements.labelB.value.trim(),
+    labelA: isSideBySide ? elements.labelA.value.trim() : '',
+    labelB: isSideBySide ? elements.labelB.value.trim() : '',
     audioCopy: elements.audioCopy.checked,
     stackHeight,
   };
