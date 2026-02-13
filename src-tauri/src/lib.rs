@@ -96,30 +96,12 @@ struct ExportParams {
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-fn resolve_font_file() -> Option<String> {
-    let candidates = [
-        "C:\\Windows\\Fonts\\segoeui.ttf",
-        "C:\\Windows\\Fonts\\SegoeUI.ttf",
-        "C:\\Windows\\Fonts\\arial.ttf",
-        "C:\\Windows\\Fonts\\Arial.ttf",
-    ];
-    for path in candidates {
-        if Path::new(path).exists() {
-            return Some(path.replace('\\', "/"));
-        }
-    }
-    None
-}
-
-fn escape_filter_value(value: &str) -> String {
+fn escape_drawtext(value: &str) -> String {
     value
         .replace('\\', "\\\\")
         .replace(':', "\\:")
         .replace('%', "\\%")
-}
-
-fn escape_drawtext(value: &str) -> String {
-    escape_filter_value(value).replace('\'', "\\'")
+        .replace('\'', "\\'")
 }
 
 fn label_filters(label: &str) -> Vec<String> {
@@ -128,12 +110,9 @@ fn label_filters(label: &str) -> Vec<String> {
         return Vec::new();
     }
 
-    let fontfile = resolve_font_file().as_deref().map(escape_filter_value);
     let text = escape_drawtext(trimmed);
     let mut drawtext = String::new();
-    if let Some(fontfile) = fontfile {
-        drawtext.push_str(&format!("fontfile={fontfile}:"));
-    }
+    drawtext.push_str("font='Segoe UI':");
     drawtext.push_str(&format!(
         "text='{text}':fontcolor=white:fontsize=h*0.055:x=(w-text_w)/2:y=h-(text_h*1.6)"
     ));
